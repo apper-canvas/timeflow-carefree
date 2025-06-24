@@ -1,107 +1,120 @@
-import { ApperSDK } from '@apper/web-sdk';
+// Apper SDK will be loaded via CDN
+let apper = null;
 
-// Initialize Apper SDK
-const apper = new ApperSDK({
-  projectId: import.meta.env.VITE_APPER_PROJECT_ID,
-  publicKey: import.meta.env.VITE_APPER_PUBLIC_KEY,
-  cdnUrl: import.meta.env.VITE_APPER_SDK_CDN_URL
-});
+// Initialize Apper SDK when available
+const initializeApperSDK = async () => {
+  if (apper) return apper;
+  
+  try {
+    if (!window.ApperSDK && window.loadApperSDK) {
+      await window.loadApperSDK();
+    }
+    
+    if (window.ApperSDK) {
+      apper = new window.ApperSDK({
+        projectId: import.meta.env.VITE_APPER_PROJECT_ID,
+        publicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
+      });
+      return apper;
+    } else {
+      throw new Error('ApperSDK not available');
+    }
+  } catch (error) {
+    console.error('Failed to initialize Apper SDK:', error);
+    throw error;
+  }
+};
 
 // Table name
 const CATEGORIES_TABLE = 'categories';
 
-export const categoryService = {
-  async getAll() {
+const categoryService = {
+  // Get all categories
+  async getCategories() {
+    await initializeApperSDK();
     try {
-      const result = await apper.database.query(CATEGORIES_TABLE);
-      return result.data || [];
+      if (!apper) throw new Error('Apper SDK not initialized');
+      const response = await apper.table(CATEGORIES_TABLE).select('*');
+      return response.data || [];
     } catch (error) {
-      throw new Error('Failed to fetch categories from database');
+      console.error('Error fetching categories:', error);
+      return [];
     }
   },
 
+  // Get category by ID
   async getById(id) {
+    await initializeApperSDK();
     try {
-      const result = await apper.database.query(CATEGORIES_TABLE, {
-        where: { Id: parseInt(id, 10) }
-      });
-      return result.data?.[0] || null;
-    } catch (error) {
-      throw new Error('Failed to fetch category from database');
-    }
-  },
-
-  async getByName(name) {
-    try {
-      const result = await apper.database.query(CATEGORIES_TABLE, {
-        where: { name: name }
-      });
-      return result.data?.[0] || null;
-    } catch (error) {
-      throw new Error('Failed to fetch category by name from database');
-    }
-  },
-
-  async create(categoryData) {
-    try {
-      // Get next ID
-      const allCategories = await this.getAll();
-      const nextId = Math.max(...allCategories.map(c => c.Id), 0) + 1;
+      if (!apper) throw new Error('Apper SDK not initialized');
+      if (!id) throw new Error('Category ID is required');
       
-      const newCategory = {
-        Id: nextId,
-        ...categoryData
-      };
-
-      await apper.database.insert(CATEGORIES_TABLE, newCategory);
-      return { ...newCategory };
+      const response = await apper.table(CATEGORIES_TABLE)
+        .select('*')
+        .eq('id', id)
+        .single();
+      return response.data || null;
     } catch (error) {
-      throw new Error('Failed to create category in database');
+      console.error('Error fetching category by ID:', error);
+      return null;
     }
   },
 
-  async update(id, updates) {
+  // Create a new category
+  async createCategory(category) {
+    await initializeApperSDK();
     try {
-      const categoryId = parseInt(id, 10);
-      const existingCategory = await this.getById(categoryId);
+      if (!apper) throw new Error('Apper SDK not initialized');
+      if (!category || !category.name) throw new Error('Category name is required');
       
-      if (!existingCategory) {
-        throw new Error('Category not found');
-      }
-
-      const updatedCategory = {
-        ...existingCategory,
-        ...updates,
-        Id: existingCategory.Id // Prevent ID modification
-      };
-
-      await apper.database.update(CATEGORIES_TABLE, {
-        where: { Id: categoryId },
-        data: updatedCategory
-      });
-
-      return { ...updatedCategory };
+      const response = await apper.table(CATEGORIES_TABLE).insert([{
+        ...category,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }]);
+      return response.data?.[0] || null;
     } catch (error) {
-      throw new Error('Failed to update category in database');
+      console.error('Error creating category:', error);
+      throw error;
     }
   },
 
-  async delete(id) {
+  // Update a category
+  async updateCategory(id, updates) {
+    await initializeApperSDK();
     try {
-      const categoryId = parseInt(id, 10);
-      const existingCategory = await this.getById(categoryId);
+      if (!apper) throw new Error('Apper SDK not initialized');
+      if (!id) throw new Error('Category ID is required');
+      if (!updates) throw new Error('Update data is required');
       
-      if (!existingCategory) {
-        throw new Error('Category not found');
-      }
-
-      await apper.database.delete(CATEGORIES_TABLE, {
-        where: { Id: categoryId }
-      });
-
-      return { ...existingCategory };
+      const response = await apper.table(CATEGORIES_TABLE)
+        .update({
+          ...updates,
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', id);
+      return response.data?.[0] || null;
     } catch (error) {
-      throw new Error('Failed to delete category from database');
+      console.error('Error updating category:', error);
+      throw error;
+    }
+  },
+
+  // Delete a category
+  async deleteCategory(id) {
+    await initializeApperSDK();
+    try {
+      if (!apper) throw new Error('Apper SDK not initialized');
+      if (!id) throw new Error('Category ID is required');
+      
+      const response = await apper.table(CATEGORIES_TABLE)
+        .delete()
+        .eq('id', id);
+      return response.error ? false : true;
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      return false;
     }
   }
 };

@@ -1,263 +1,242 @@
-import { ApperSDK } from '@apper/web-sdk';
+// Apper SDK will be loaded via CDN
+let apper = null;
 
-// Initialize Apper SDK
-const apper = new ApperSDK({
-  projectId: import.meta.env.VITE_APPER_PROJECT_ID,
-  publicKey: import.meta.env.VITE_APPER_PUBLIC_KEY,
-  cdnUrl: import.meta.env.VITE_APPER_SDK_CDN_URL
-});
+// Initialize Apper SDK when available
+const initializeApperSDK = async () => {
+  if (apper) return apper;
+  
+  try {
+    if (!window.ApperSDK && window.loadApperSDK) {
+      await window.loadApperSDK();
+    }
+    
+    if (window.ApperSDK) {
+      apper = new window.ApperSDK({
+        projectId: import.meta.env.VITE_APPER_PROJECT_ID,
+publicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
+      });
+      return apper;
+    } else {
+      throw new Error('ApperSDK not available');
+    }
+  } catch (error) {
+    console.error('Failed to initialize Apper SDK:', error);
+    throw error;
+  }
+};
 
 // Table names
 const TIME_ENTRIES_TABLE = 'timeEntries';
 const ACTIVE_TIMER_TABLE = 'activeTimer';
 
-let activeTimer = null;
-
-export const timeEntryService = {
-  async getAll() {
+const timeEntryService = {
+  // Get all time entries
+// Get all time entries
+  async getTimeEntries(limit = 50) {
+    await initializeApperSDK();
     try {
-      const result = await apper.database.query(TIME_ENTRIES_TABLE);
-      return result.data || [];
+      if (!apper) throw new Error('Apper SDK not initialized');
+      const response = await apper.table(TIME_ENTRIES_TABLE).select('*').limit(limit);
+      return response.data || [];
     } catch (error) {
-      throw new Error('Failed to fetch time entries from database');
+      console.error('Error fetching time entries:', error);
+      return [];
     }
   },
 
-  async getById(id) {
+  // Get time entries for a specific date
+  async getTimeEntriesByDate(date) {
+    await initializeApperSDK();
     try {
-      const result = await apper.database.query(TIME_ENTRIES_TABLE, {
-        where: { Id: parseInt(id, 10) }
-      });
-      return result.data?.[0] || null;
+      if (!apper) throw new Error('Apper SDK not initialized');
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const response = await apper.table(TIME_ENTRIES_TABLE)
+        .select('*')
+        .gte('startTime', startOfDay.toISOString())
+        .lte('startTime', endOfDay.toISOString());
+      return response.data || [];
     } catch (error) {
-      throw new Error('Failed to fetch time entry from database');
+      console.error('Error fetching time entries by date:', error);
+      return [];
     }
   },
 
+  // Get today's entries
   async getTodaysEntries() {
+    await initializeApperSDK();
     try {
-      const today = new Date().toDateString();
-      const result = await apper.database.query(TIME_ENTRIES_TABLE);
-      const entries = result.data || [];
-      
-      return entries.filter(entry => {
-        const entryDate = new Date(entry.startTime).toDateString();
-        return entryDate === today;
-      });
+      if (!apper) throw new Error('Apper SDK not initialized');
+      const today = new Date();
+      return await this.getTimeEntriesByDate(today);
     } catch (error) {
-      throw new Error('Failed to fetch today\'s entries from database');
+      console.error('Error fetching today\'s entries:', error);
+      return [];
     }
   },
 
+  // Create a new time entry
+  async createTimeEntry(timeEntry) {
+    await initializeApperSDK();
+    try {
+      if (!apper) throw new Error('Apper SDK not initialized');
+      const response = await apper.table(TIME_ENTRIES_TABLE).insert([{
+        ...timeEntry,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }]);
+      return response.data?.[0] || null;
+    } catch (error) {
+      console.error('Error creating time entry:', error);
+      return null;
+    }
+  },
+
+  // Update a time entry
+  async updateTimeEntry(id, updates) {
+    await initializeApperSDK();
+    try {
+      if (!apper) throw new Error('Apper SDK not initialized');
+      const response = await apper.table(TIME_ENTRIES_TABLE)
+        .update({
+          ...updates,
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', id);
+      return response.data?.[0] || null;
+    } catch (error) {
+      console.error('Error updating time entry:', error);
+      return null;
+    }
+  },
+
+  // Delete a time entry
+  async deleteTimeEntry(id) {
+    await initializeApperSDK();
+    try {
+      if (!apper) throw new Error('Apper SDK not initialized');
+      const response = await apper.table(TIME_ENTRIES_TABLE)
+        .delete()
+        .eq('id', id);
+      return response.error ? false : true;
+    } catch (error) {
+      console.error('Error deleting time entry:', error);
+      return false;
+    }
+  },
+
+  // Get active timer
   async getActiveTimer() {
-    if (activeTimer) {
-      return { ...activeTimer };
-    }
-    
+    await initializeApperSDK();
     try {
-      const result = await apper.database.query(ACTIVE_TIMER_TABLE);
-      const timer = result.data?.[0] || null;
-      activeTimer = timer;
-      return timer ? { ...timer } : null;
+      if (!apper) throw new Error('Apper SDK not initialized');
+      const response = await apper.table(ACTIVE_TIMER_TABLE)
+        .select('*')
+        .limit(1);
+      return response.data?.[0] || null;
     } catch (error) {
-      throw new Error('Failed to fetch active timer from database');
+      console.error('Error fetching active timer:', error);
+      return null;
     }
   },
 
-  async startTimer(activityName, category) {
+  // Start timer
+  async startTimer(categoryId, description = '') {
+    await initializeApperSDK();
     try {
-      // Stop any existing active timer
-      if (activeTimer) {
-        await this.stopTimer();
-      }
-
-      // Get next ID
-      const allEntries = await this.getAll();
-      const nextId = Math.max(...allEntries.map(e => e.Id), 0) + 1;
-
-      const newEntry = {
-        Id: nextId,
-        activityName,
-        category,
+      if (!apper) throw new Error('Apper SDK not initialized');
+      // First, stop any existing timer
+      await this.stopTimer();
+      
+      const timerData = {
+        id: crypto.randomUUID(),
+        categoryId,
+        description,
         startTime: new Date().toISOString(),
-        endTime: null,
-        duration: 0,
-        isActive: true
+        isActive: true,
+        createdAt: new Date().toISOString()
       };
 
-      // Save to time entries table
-      await apper.database.insert(TIME_ENTRIES_TABLE, newEntry);
-
-      // Save as active timer
-      await apper.database.insert(ACTIVE_TIMER_TABLE, newEntry);
-      
-      activeTimer = { ...newEntry };
-      return { ...newEntry };
+      // Save to active timer table
+      const response = await apper.table(ACTIVE_TIMER_TABLE).insert([timerData]);
+      return response.data?.[0] || null;
     } catch (error) {
-      throw new Error('Failed to start timer in database');
+      console.error('Error starting timer:', error);
+      return null;
     }
   },
 
+  // Stop timer
   async stopTimer() {
-    if (!activeTimer) {
-      throw new Error('No active timer to stop');
-    }
-
+    await initializeApperSDK();
     try {
+      if (!apper) throw new Error('Apper SDK not initialized');
+      // Get current active timer
+      const activeTimer = await this.getActiveTimer();
+      if (!activeTimer) return null;
+
+      // Calculate duration
       const endTime = new Date();
       const startTime = new Date(activeTimer.startTime);
-      const duration = Math.round((endTime - startTime) / (1000 * 60));
+      const duration = Math.round((endTime - startTime) / (1000 * 60)); // minutes
 
-      const updatedEntry = {
+      const completedEntry = {
         ...activeTimer,
         endTime: endTime.toISOString(),
         duration,
-        isActive: false
+        isActive: false,
+        updatedAt: new Date().toISOString()
       };
 
-      // Update in time entries table
-      await apper.database.update(TIME_ENTRIES_TABLE, {
-        where: { Id: activeTimer.Id },
-        data: updatedEntry
-      });
+      // Save to time entries table
+      await apper.table(TIME_ENTRIES_TABLE).insert([completedEntry]);
 
       // Clear active timer table
-      await apper.database.delete(ACTIVE_TIMER_TABLE, {
-        where: { Id: activeTimer.Id }
-      });
+      await apper.table(ACTIVE_TIMER_TABLE).delete().eq('id', activeTimer.id);
 
-      activeTimer = null;
-      return { ...updatedEntry };
+      return completedEntry;
     } catch (error) {
-      throw new Error('Failed to stop timer in database');
+      console.error('Error stopping timer:', error);
+      return null;
     }
   },
 
-  async create(entryData) {
-    try {
-      // Get next ID
-      const allEntries = await this.getAll();
-      const nextId = Math.max(...allEntries.map(e => e.Id), 0) + 1;
-      
-      const newEntry = {
-        Id: nextId,
-        ...entryData,
-        isActive: false
-      };
-
-      // Calculate duration if both start and end times provided
-      if (entryData.startTime && entryData.endTime) {
-        const start = new Date(entryData.startTime);
-        const end = new Date(entryData.endTime);
-        newEntry.duration = Math.round((end - start) / (1000 * 60));
-      }
-
-      await apper.database.insert(TIME_ENTRIES_TABLE, newEntry);
-      return { ...newEntry };
-    } catch (error) {
-      throw new Error('Failed to create time entry in database');
-    }
-  },
-
-  async update(id, updates) {
-    try {
-      const entryId = parseInt(id, 10);
-      const existingEntry = await this.getById(entryId);
-      
-      if (!existingEntry) {
-        throw new Error('Time entry not found');
-      }
-
-      const updatedEntry = {
-        ...existingEntry,
-        ...updates,
-        Id: existingEntry.Id // Prevent ID modification
-      };
-
-      // Recalculate duration if start or end time changed
-      if (updates.startTime || updates.endTime) {
-        const start = new Date(updatedEntry.startTime);
-        const end = new Date(updatedEntry.endTime);
-        updatedEntry.duration = Math.round((end - start) / (1000 * 60));
-      }
-
-      await apper.database.update(TIME_ENTRIES_TABLE, {
-        where: { Id: entryId },
-        data: updatedEntry
-      });
-      
-      // Update active timer if it's the one being updated
-      if (activeTimer && activeTimer.Id === entryId) {
-        activeTimer = { ...updatedEntry };
-        await apper.database.update(ACTIVE_TIMER_TABLE, {
-          where: { Id: entryId },
-          data: updatedEntry
-        });
-      }
-      
-      return { ...updatedEntry };
-    } catch (error) {
-      throw new Error('Failed to update time entry in database');
-    }
-  },
-
-  async delete(id) {
-    try {
-      const entryId = parseInt(id, 10);
-      const existingEntry = await this.getById(entryId);
-      
-      if (!existingEntry) {
-        throw new Error('Time entry not found');
-      }
-
-      await apper.database.delete(TIME_ENTRIES_TABLE, {
-        where: { Id: entryId }
-      });
-      
-      // Clear active timer if it's the one being deleted
-      if (activeTimer && activeTimer.Id === entryId) {
-        activeTimer = null;
-        await apper.database.delete(ACTIVE_TIMER_TABLE, {
-          where: { Id: entryId }
-        });
-      }
-      
-      return { ...existingEntry };
-    } catch (error) {
-      throw new Error('Failed to delete time entry from database');
-    }
-  },
-
+  // Get daily summary
   async getDailySummary(date = new Date()) {
     try {
-      const targetDate = new Date(date).toDateString();
-      const allEntries = await this.getAll();
+      const entries = await this.getTimeEntriesByDate(date);
       
-      const dayEntries = allEntries.filter(entry => {
-        const entryDate = new Date(entry.startTime).toDateString();
-        return entryDate === targetDate && !entry.isActive;
-      });
-
-      const totalMinutes = dayEntries.reduce((sum, entry) => sum + entry.duration, 0);
+      const completedEntries = entries.filter(entry => !entry.isActive && entry.duration);
+      const totalMinutes = completedEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0);
       
-      const categoryBreakdown = dayEntries.reduce((acc, entry) => {
-        if (!acc[entry.category]) {
-          acc[entry.category] = 0;
+      const categoryBreakdown = completedEntries.reduce((acc, entry) => {
+        const category = entry.category || entry.categoryId || 'Uncategorized';
+        if (!acc[category]) {
+          acc[category] = 0;
         }
-        acc[entry.category] += entry.duration;
+        acc[category] += entry.duration || 0;
         return acc;
       }, {});
 
       return {
-        date: targetDate,
+        date: new Date(date).toDateString(),
         totalMinutes,
         categoryBreakdown,
-        entryCount: dayEntries.length
+        entryCount: completedEntries.length
       };
     } catch (error) {
-      throw new Error('Failed to get daily summary from database');
+      console.error('Error getting daily summary:', error);
+      return {
+        date: new Date(date).toDateString(),
+        totalMinutes: 0,
+        categoryBreakdown: {},
+        entryCount: 0
+      };
     }
   }
-};
 
 export default timeEntryService;

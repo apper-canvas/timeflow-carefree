@@ -1,11 +1,32 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
+<meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TimeFlow - Time Tracker</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>Vite + React</title>
+    <script>
+      // Load Apper SDK from CDN
+      const loadApperSDK = () => {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://test-cdn.apper.io/v1/apper-sdk.v1.js';
+          script.onload = () => {
+            if (window.ApperSDK) {
+              resolve(window.ApperSDK);
+            } else {
+              reject(new Error('ApperSDK not available after loading'));
+            }
+          };
+          script.onerror = () => reject(new Error('Failed to load Apper SDK'));
+          document.head.appendChild(script);
+        });
+      };
+
+      // Make SDK available globally
+      window.loadApperSDK = loadApperSDK;
+    </script>
+  </head>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
