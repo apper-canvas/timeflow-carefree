@@ -31,9 +31,10 @@ const TimerControls = ({
       setCategories(result);
       if (result.length > 0 && !selectedCategory) {
         setSelectedCategory(result[0]);
-      }
+}
     } catch (error) {
-      toast.error('Failed to load categories');
+      console.error('Database error loading categories:', error);
+      toast.error('Failed to load categories from database');
     }
   };
 
@@ -55,9 +56,10 @@ const TimerControls = ({
         selectedCategory.name
       );
       onTimerStart(entry);
-      toast.success('Timer started!');
+toast.success('Timer started!');
     } catch (error) {
-      toast.error('Failed to start timer');
+      console.error('Database error starting timer:', error);
+      toast.error('Failed to start timer. Please check your database connection.');
     } finally {
       setIsStarting(false);
     }
@@ -69,9 +71,10 @@ const TimerControls = ({
       const entry = await timeEntryService.stopTimer();
       onTimerStop(entry);
       setActivityName('');
-      toast.success('Timer stopped and logged!');
+toast.success('Timer stopped and logged!');
     } catch (error) {
-      toast.error('Failed to stop timer');
+      console.error('Database error stopping timer:', error);
+      toast.error('Failed to stop timer. Please check your database connection.');
     } finally {
       setLoading(false);
     }

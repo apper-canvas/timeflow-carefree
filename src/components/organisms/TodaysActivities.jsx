@@ -34,10 +34,11 @@ const TodaysActivities = ({
       ]);
       
       setEntries(entriesResult);
-      setCategories(categoriesResult);
+setCategories(categoriesResult);
     } catch (err) {
-      setError(err.message || 'Failed to load activities');
-      toast.error('Failed to load today\'s activities');
+      console.error('Database error:', err);
+      setError(err.message || 'Failed to connect to database');
+      toast.error('Failed to load today\'s activities. Please check your database connection.');
     } finally {
       setLoading(false);
     }

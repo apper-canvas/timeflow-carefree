@@ -61,9 +61,10 @@ const Home = () => {
       }
 
       setDailySummary(summaryResult);
-      setCategories(categoriesResult);
+setCategories(categoriesResult);
     } catch (error) {
-      toast.error('Failed to load timer data');
+      console.error('Database connection error:', error);
+      toast.error('Failed to connect to database. Please check your connection.');
     }
   };
 

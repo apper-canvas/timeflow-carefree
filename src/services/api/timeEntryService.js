@@ -1,185 +1,262 @@
-import timeEntriesData from '@/services/mockData/timeEntries.json';
+import { ApperSDK } from '@apper/web-sdk';
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// Initialize Apper SDK
+const apper = new ApperSDK({
+  projectId: import.meta.env.VITE_APPER_PROJECT_ID,
+  publicKey: import.meta.env.VITE_APPER_PUBLIC_KEY,
+  cdnUrl: import.meta.env.VITE_APPER_SDK_CDN_URL
+});
 
-let timeEntries = [...timeEntriesData];
+// Table names
+const TIME_ENTRIES_TABLE = 'timeEntries';
+const ACTIVE_TIMER_TABLE = 'activeTimer';
+
 let activeTimer = null;
 
 export const timeEntryService = {
   async getAll() {
-    await delay(300);
-    return [...timeEntries];
+    try {
+      const result = await apper.database.query(TIME_ENTRIES_TABLE);
+      return result.data || [];
+    } catch (error) {
+      throw new Error('Failed to fetch time entries from database');
+    }
   },
 
   async getById(id) {
-    await delay(200);
-    const entry = timeEntries.find(entry => entry.Id === parseInt(id, 10));
-    return entry ? { ...entry } : null;
+    try {
+      const result = await apper.database.query(TIME_ENTRIES_TABLE, {
+        where: { Id: parseInt(id, 10) }
+      });
+      return result.data?.[0] || null;
+    } catch (error) {
+      throw new Error('Failed to fetch time entry from database');
+    }
   },
 
   async getTodaysEntries() {
-    await delay(300);
-    const today = new Date().toDateString();
-    return timeEntries
-      .filter(entry => {
+    try {
+      const today = new Date().toDateString();
+      const result = await apper.database.query(TIME_ENTRIES_TABLE);
+      const entries = result.data || [];
+      
+      return entries.filter(entry => {
         const entryDate = new Date(entry.startTime).toDateString();
         return entryDate === today;
-      })
-      .map(entry => ({ ...entry }));
+      });
+    } catch (error) {
+      throw new Error('Failed to fetch today\'s entries from database');
+    }
   },
 
   async getActiveTimer() {
-    await delay(100);
-    return activeTimer ? { ...activeTimer } : null;
+    if (activeTimer) {
+      return { ...activeTimer };
+    }
+    
+    try {
+      const result = await apper.database.query(ACTIVE_TIMER_TABLE);
+      const timer = result.data?.[0] || null;
+      activeTimer = timer;
+      return timer ? { ...timer } : null;
+    } catch (error) {
+      throw new Error('Failed to fetch active timer from database');
+    }
   },
 
   async startTimer(activityName, category) {
-    await delay(200);
-    
-    // Stop any existing active timer
-    if (activeTimer) {
-      await this.stopTimer();
+    try {
+      // Stop any existing active timer
+      if (activeTimer) {
+        await this.stopTimer();
+      }
+
+      // Get next ID
+      const allEntries = await this.getAll();
+      const nextId = Math.max(...allEntries.map(e => e.Id), 0) + 1;
+
+      const newEntry = {
+        Id: nextId,
+        activityName,
+        category,
+        startTime: new Date().toISOString(),
+        endTime: null,
+        duration: 0,
+        isActive: true
+      };
+
+      // Save to time entries table
+      await apper.database.insert(TIME_ENTRIES_TABLE, newEntry);
+
+      // Save as active timer
+      await apper.database.insert(ACTIVE_TIMER_TABLE, newEntry);
+      
+      activeTimer = { ...newEntry };
+      return { ...newEntry };
+    } catch (error) {
+      throw new Error('Failed to start timer in database');
     }
-
-    const newEntry = {
-      Id: Math.max(...timeEntries.map(e => e.Id), 0) + 1,
-      activityName,
-      category,
-      startTime: new Date().toISOString(),
-      endTime: null,
-      duration: 0,
-      isActive: true
-    };
-
-    timeEntries.push(newEntry);
-    activeTimer = { ...newEntry };
-    
-    return { ...newEntry };
   },
 
   async stopTimer() {
-    await delay(200);
-    
     if (!activeTimer) {
       throw new Error('No active timer to stop');
     }
 
-    const endTime = new Date();
-    const startTime = new Date(activeTimer.startTime);
-    const duration = Math.round((endTime - startTime) / (1000 * 60)); // Duration in minutes
+    try {
+      const endTime = new Date();
+      const startTime = new Date(activeTimer.startTime);
+      const duration = Math.round((endTime - startTime) / (1000 * 60));
 
-    const updatedEntry = {
-      ...activeTimer,
-      endTime: endTime.toISOString(),
-      duration,
-      isActive: false
-    };
+      const updatedEntry = {
+        ...activeTimer,
+        endTime: endTime.toISOString(),
+        duration,
+        isActive: false
+      };
 
-    // Update in timeEntries array
-    const index = timeEntries.findIndex(entry => entry.Id === activeTimer.Id);
-    if (index !== -1) {
-      timeEntries[index] = updatedEntry;
+      // Update in time entries table
+      await apper.database.update(TIME_ENTRIES_TABLE, {
+        where: { Id: activeTimer.Id },
+        data: updatedEntry
+      });
+
+      // Clear active timer table
+      await apper.database.delete(ACTIVE_TIMER_TABLE, {
+        where: { Id: activeTimer.Id }
+      });
+
+      activeTimer = null;
+      return { ...updatedEntry };
+    } catch (error) {
+      throw new Error('Failed to stop timer in database');
     }
-
-    activeTimer = null;
-    return { ...updatedEntry };
   },
 
   async create(entryData) {
-    await delay(300);
-    
-    const newEntry = {
-      Id: Math.max(...timeEntries.map(e => e.Id), 0) + 1,
-      ...entryData,
-      isActive: false
-    };
+    try {
+      // Get next ID
+      const allEntries = await this.getAll();
+      const nextId = Math.max(...allEntries.map(e => e.Id), 0) + 1;
+      
+      const newEntry = {
+        Id: nextId,
+        ...entryData,
+        isActive: false
+      };
 
-    // Calculate duration if both start and end times provided
-    if (entryData.startTime && entryData.endTime) {
-      const start = new Date(entryData.startTime);
-      const end = new Date(entryData.endTime);
-      newEntry.duration = Math.round((end - start) / (1000 * 60));
+      // Calculate duration if both start and end times provided
+      if (entryData.startTime && entryData.endTime) {
+        const start = new Date(entryData.startTime);
+        const end = new Date(entryData.endTime);
+        newEntry.duration = Math.round((end - start) / (1000 * 60));
+      }
+
+      await apper.database.insert(TIME_ENTRIES_TABLE, newEntry);
+      return { ...newEntry };
+    } catch (error) {
+      throw new Error('Failed to create time entry in database');
     }
-
-    timeEntries.push(newEntry);
-    return { ...newEntry };
   },
 
   async update(id, updates) {
-    await delay(300);
-    
-    const index = timeEntries.findIndex(entry => entry.Id === parseInt(id, 10));
-    if (index === -1) {
-      throw new Error('Time entry not found');
-    }
+    try {
+      const entryId = parseInt(id, 10);
+      const existingEntry = await this.getById(entryId);
+      
+      if (!existingEntry) {
+        throw new Error('Time entry not found');
+      }
 
-    const updatedEntry = {
-      ...timeEntries[index],
-      ...updates,
-      Id: timeEntries[index].Id // Prevent ID modification
-    };
+      const updatedEntry = {
+        ...existingEntry,
+        ...updates,
+        Id: existingEntry.Id // Prevent ID modification
+      };
 
-    // Recalculate duration if start or end time changed
-    if (updates.startTime || updates.endTime) {
-      const start = new Date(updatedEntry.startTime);
-      const end = new Date(updatedEntry.endTime);
-      updatedEntry.duration = Math.round((end - start) / (1000 * 60));
-    }
+      // Recalculate duration if start or end time changed
+      if (updates.startTime || updates.endTime) {
+        const start = new Date(updatedEntry.startTime);
+        const end = new Date(updatedEntry.endTime);
+        updatedEntry.duration = Math.round((end - start) / (1000 * 60));
+      }
 
-    timeEntries[index] = updatedEntry;
-    
-    // Update active timer if it's the one being updated
-    if (activeTimer && activeTimer.Id === parseInt(id, 10)) {
-      activeTimer = { ...updatedEntry };
+      await apper.database.update(TIME_ENTRIES_TABLE, {
+        where: { Id: entryId },
+        data: updatedEntry
+      });
+      
+      // Update active timer if it's the one being updated
+      if (activeTimer && activeTimer.Id === entryId) {
+        activeTimer = { ...updatedEntry };
+        await apper.database.update(ACTIVE_TIMER_TABLE, {
+          where: { Id: entryId },
+          data: updatedEntry
+        });
+      }
+      
+      return { ...updatedEntry };
+    } catch (error) {
+      throw new Error('Failed to update time entry in database');
     }
-    
-    return { ...updatedEntry };
   },
 
   async delete(id) {
-    await delay(200);
-    
-    const index = timeEntries.findIndex(entry => entry.Id === parseInt(id, 10));
-    if (index === -1) {
-      throw new Error('Time entry not found');
-    }
+    try {
+      const entryId = parseInt(id, 10);
+      const existingEntry = await this.getById(entryId);
+      
+      if (!existingEntry) {
+        throw new Error('Time entry not found');
+      }
 
-    const deletedEntry = timeEntries[index];
-    timeEntries.splice(index, 1);
-    
-    // Clear active timer if it's the one being deleted
-    if (activeTimer && activeTimer.Id === parseInt(id, 10)) {
-      activeTimer = null;
+      await apper.database.delete(TIME_ENTRIES_TABLE, {
+        where: { Id: entryId }
+      });
+      
+      // Clear active timer if it's the one being deleted
+      if (activeTimer && activeTimer.Id === entryId) {
+        activeTimer = null;
+        await apper.database.delete(ACTIVE_TIMER_TABLE, {
+          where: { Id: entryId }
+        });
+      }
+      
+      return { ...existingEntry };
+    } catch (error) {
+      throw new Error('Failed to delete time entry from database');
     }
-    
-    return { ...deletedEntry };
   },
 
   async getDailySummary(date = new Date()) {
-    await delay(300);
-    
-    const targetDate = new Date(date).toDateString();
-    const dayEntries = timeEntries.filter(entry => {
-      const entryDate = new Date(entry.startTime).toDateString();
-      return entryDate === targetDate && !entry.isActive;
-    });
+    try {
+      const targetDate = new Date(date).toDateString();
+      const allEntries = await this.getAll();
+      
+      const dayEntries = allEntries.filter(entry => {
+        const entryDate = new Date(entry.startTime).toDateString();
+        return entryDate === targetDate && !entry.isActive;
+      });
 
-    const totalMinutes = dayEntries.reduce((sum, entry) => sum + entry.duration, 0);
-    
-    const categoryBreakdown = dayEntries.reduce((acc, entry) => {
-      if (!acc[entry.category]) {
-        acc[entry.category] = 0;
-      }
-      acc[entry.category] += entry.duration;
-      return acc;
-    }, {});
+      const totalMinutes = dayEntries.reduce((sum, entry) => sum + entry.duration, 0);
+      
+      const categoryBreakdown = dayEntries.reduce((acc, entry) => {
+        if (!acc[entry.category]) {
+          acc[entry.category] = 0;
+        }
+        acc[entry.category] += entry.duration;
+        return acc;
+      }, {});
 
-    return {
-      date: targetDate,
-      totalMinutes,
-      categoryBreakdown,
-      entryCount: dayEntries.length
-    };
+      return {
+        date: targetDate,
+        totalMinutes,
+        categoryBreakdown,
+        entryCount: dayEntries.length
+      };
+    } catch (error) {
+      throw new Error('Failed to get daily summary from database');
+    }
   }
 };
 

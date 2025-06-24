@@ -1,68 +1,108 @@
-import categoriesData from '@/services/mockData/categories.json';
+import { ApperSDK } from '@apper/web-sdk';
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// Initialize Apper SDK
+const apper = new ApperSDK({
+  projectId: import.meta.env.VITE_APPER_PROJECT_ID,
+  publicKey: import.meta.env.VITE_APPER_PUBLIC_KEY,
+  cdnUrl: import.meta.env.VITE_APPER_SDK_CDN_URL
+});
 
-let categories = [...categoriesData];
+// Table name
+const CATEGORIES_TABLE = 'categories';
 
 export const categoryService = {
   async getAll() {
-    await delay(200);
-    return [...categories];
+    try {
+      const result = await apper.database.query(CATEGORIES_TABLE);
+      return result.data || [];
+    } catch (error) {
+      throw new Error('Failed to fetch categories from database');
+    }
   },
 
   async getById(id) {
-    await delay(100);
-    const category = categories.find(cat => cat.Id === parseInt(id, 10));
-    return category ? { ...category } : null;
+    try {
+      const result = await apper.database.query(CATEGORIES_TABLE, {
+        where: { Id: parseInt(id, 10) }
+      });
+      return result.data?.[0] || null;
+    } catch (error) {
+      throw new Error('Failed to fetch category from database');
+    }
   },
 
   async getByName(name) {
-    await delay(100);
-    const category = categories.find(cat => cat.name === name);
-    return category ? { ...category } : null;
+    try {
+      const result = await apper.database.query(CATEGORIES_TABLE, {
+        where: { name: name }
+      });
+      return result.data?.[0] || null;
+    } catch (error) {
+      throw new Error('Failed to fetch category by name from database');
+    }
   },
 
   async create(categoryData) {
-    await delay(200);
-    
-    const newCategory = {
-      Id: Math.max(...categories.map(c => c.Id), 0) + 1,
-      ...categoryData
-    };
+    try {
+      // Get next ID
+      const allCategories = await this.getAll();
+      const nextId = Math.max(...allCategories.map(c => c.Id), 0) + 1;
+      
+      const newCategory = {
+        Id: nextId,
+        ...categoryData
+      };
 
-    categories.push(newCategory);
-    return { ...newCategory };
+      await apper.database.insert(CATEGORIES_TABLE, newCategory);
+      return { ...newCategory };
+    } catch (error) {
+      throw new Error('Failed to create category in database');
+    }
   },
 
   async update(id, updates) {
-    await delay(200);
-    
-    const index = categories.findIndex(category => category.Id === parseInt(id, 10));
-    if (index === -1) {
-      throw new Error('Category not found');
+    try {
+      const categoryId = parseInt(id, 10);
+      const existingCategory = await this.getById(categoryId);
+      
+      if (!existingCategory) {
+        throw new Error('Category not found');
+      }
+
+      const updatedCategory = {
+        ...existingCategory,
+        ...updates,
+        Id: existingCategory.Id // Prevent ID modification
+      };
+
+      await apper.database.update(CATEGORIES_TABLE, {
+        where: { Id: categoryId },
+        data: updatedCategory
+      });
+
+      return { ...updatedCategory };
+    } catch (error) {
+      throw new Error('Failed to update category in database');
     }
-
-    const updatedCategory = {
-      ...categories[index],
-      ...updates,
-      Id: categories[index].Id // Prevent ID modification
-    };
-
-    categories[index] = updatedCategory;
-    return { ...updatedCategory };
   },
 
   async delete(id) {
-    await delay(200);
-    
-    const index = categories.findIndex(category => category.Id === parseInt(id, 10));
-    if (index === -1) {
-      throw new Error('Category not found');
-    }
+    try {
+      const categoryId = parseInt(id, 10);
+      const existingCategory = await this.getById(categoryId);
+      
+      if (!existingCategory) {
+        throw new Error('Category not found');
+      }
 
-    const deletedCategory = categories[index];
-    categories.splice(index, 1);
-    return { ...deletedCategory };
+      await apper.database.delete(CATEGORIES_TABLE, {
+        where: { Id: categoryId }
+      });
+
+      return { ...existingCategory };
+    } catch (error) {
+      throw new Error('Failed to delete category from database');
+    }
   }
 };
 
