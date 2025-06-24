@@ -1,0 +1,47 @@
+[
+  {
+    "Id": 1,
+    "activityName": "Client Meeting - Project Kickoff",
+    "category": "meetings",
+    "startTime": "2024-01-15T09:00:00.000Z",
+    "endTime": "2024-01-15T10:30:00.000Z",
+    "duration": 90,
+    "isActive": false
+  },
+  {
+    "Id": 2,
+    "activityName": "Feature Development - Authentication",
+    "category": "development",
+    "startTime": "2024-01-15T11:00:00.000Z",
+    "endTime": "2024-01-15T13:45:00.000Z",
+    "duration": 165,
+    "isActive": false
+  },
+  {
+    "Id": 3,
+    "activityName": "Email Response and Planning",
+    "category": "communication",
+    "startTime": "2024-01-15T14:00:00.000Z",
+    "endTime": "2024-01-15T14:30:00.000Z",
+    "duration": 30,
+    "isActive": false
+  },
+  {
+    "Id": 4,
+    "activityName": "Code Review - Frontend Components",
+    "category": "development",
+    "startTime": "2024-01-15T15:00:00.000Z",
+    "endTime": "2024-01-15T16:15:00.000Z",
+    "duration": 75,
+    "isActive": false
+  },
+  {
+    "Id": 5,
+    "activityName": "Weekly Team Standup",
+    "category": "meetings",
+    "startTime": "2024-01-15T16:30:00.000Z",
+    "endTime": "2024-01-15T17:00:00.000Z",
+    "duration": 30,
+    "isActive": false
+  }
+]

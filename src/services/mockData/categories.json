@@ -1,0 +1,44 @@
+[
+  {
+    "Id": 1,
+    "name": "development",
+    "displayName": "Development",
+    "color": "#3B82F6",
+    "icon": "Code"
+  },
+  {
+    "Id": 2,
+    "name": "meetings",
+    "displayName": "Meetings",
+    "color": "#8B5CF6",
+    "icon": "Users"
+  },
+  {
+    "Id": 3,
+    "name": "design",
+    "displayName": "Design",
+    "color": "#EC4899",
+    "icon": "Palette"
+  },
+  {
+    "Id": 4,
+    "name": "research",
+    "displayName": "Research",
+    "color": "#10B981",
+    "icon": "Search"
+  },
+  {
+    "Id": 5,
+    "name": "communication",
+    "displayName": "Communication",
+    "color": "#F59E0B",
+    "icon": "MessageCircle"
+  },
+  {
+    "Id": 6,
+    "name": "admin",
+    "displayName": "Admin",
+    "color": "#6B7280",
+    "icon": "FileText"
+  }
+]
